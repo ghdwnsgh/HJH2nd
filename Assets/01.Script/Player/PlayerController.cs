@@ -10,11 +10,36 @@ public class PlayerController : MonoBehaviour
     [SerializeField] private float sprintSpeed = 8f;
     [SerializeField] private float rotateSpeed = 10f;
 
-    [Header("중력 설정")]
+    [Header("점프 및 중력 설정")]
+    [SerializeField] private float jumpPower = 7f;
     [SerializeField] private float gravity = -20f;
 
     [Header("카메라")]
     [SerializeField] private Transform cameraTransform;
+
+    [Header("공격 설정")]
+    [SerializeField] private float attackDamage = 25f;
+    [SerializeField] private float attackRange = 2f;
+    [SerializeField] private float attackRadius = 1f;
+    [SerializeField] private float attackCooldown = 0.5f;
+
+    private float nextAttackTime = 0f;
+
+    [Header("회피 설정")]
+    [SerializeField] private float dodgeSpeed = 15f;
+    [SerializeField] private float dodgeDuration = 0.2f;
+    [SerializeField] private float invincibleDuration = 0.3f;
+    [SerializeField] private float dodgeCooldown = 2f;
+
+    private bool isDodging;
+    private float dodgeTimer;
+    private float invincibleTimer;
+    private float nextDodgeTime;
+    private Vector3 dodgeDirection;
+
+    // 다른 스크립트에서 무적 여부를 확인할 때 사용
+    public bool IsInvincible => invincibleTimer > 0f;
+
 
     private CharacterController controller;
 
@@ -29,12 +54,27 @@ public class PlayerController : MonoBehaviour
 
     private void Update()
     {
+        if (dodgeTimer > 0f)
+        {
+            dodgeTimer -= Time.deltaTime;
+
+            if (dodgeTimer <= 0f)
+            {
+                isDodging = false;
+            }
+        }
+
+        if (invincibleTimer > 0f)
+        {
+            invincibleTimer -= Time.deltaTime;
+        }
+
         Move();
     }
 
     private void Move()
     {
-        // 카메라 기준 방향 계산
+        // 카메라 기준 이동 방향
         Vector3 forward = cameraTransform.forward;
         forward.y = 0f;
         forward.Normalize();
@@ -44,6 +84,7 @@ public class PlayerController : MonoBehaviour
         right.Normalize();
 
         Vector3 moveDirection = forward * moveInput.y + right * moveInput.x;
+
         moveDirection = Vector3.ClampMagnitude(moveDirection, 1f);
 
         // 이동 방향으로 회전
@@ -53,7 +94,7 @@ public class PlayerController : MonoBehaviour
             transform.rotation = Quaternion.Slerp(transform.rotation, targetRotation, rotateSpeed * Time.deltaTime);
         }
 
-        // 바닥 판정 및 중력
+        // 바닥에 있을 때 아래 방향 속도 유지
         if (controller.isGrounded && verticalVelocity < 0f)
         {
             verticalVelocity = -2f;
@@ -63,13 +104,23 @@ public class PlayerController : MonoBehaviour
             verticalVelocity += gravity * Time.deltaTime;
         }
 
-        // 걷기 또는 달리기 속도 선택
-        float currentSpeed = isSprint ? sprintSpeed : moveSpeed;
 
-        Vector3 velocity = moveDirection * currentSpeed;
+        Vector3 velocity;
+
+        if (isDodging)
+        {
+            // 회피 중에는 지정된 방향으로 빠르게 이동
+            velocity = dodgeDirection * dodgeSpeed;
+        }
+        else
+        {
+            float currentSpeed = isSprint ? sprintSpeed : moveSpeed;
+            velocity = moveDirection * currentSpeed;
+        }
+
         velocity.y = verticalVelocity;
-
         controller.Move(velocity * Time.deltaTime);
+
     }
 
     public void OnMove(InputAction.CallbackContext context)
@@ -88,4 +139,115 @@ public class PlayerController : MonoBehaviour
             isSprint = false;
         }
     }
+
+    public void OnJump(InputAction.CallbackContext context)
+    {
+        // 키를 누른 순간에만 점프
+        if (!context.performed)
+            return;
+
+        // 바닥에 있을 때만 점프
+        if (controller.isGrounded)
+        {
+            verticalVelocity = jumpPower;
+        }
+    }
+
+    // 일반공격 : 마우스 왼쪽 클릭
+    public void OnAttack(InputAction.CallbackContext context)
+    {
+        if (!context.performed)
+            return;
+
+        // 공격 쿨타임
+        if (Time.time < nextAttackTime)
+        {
+            return;
+        }
+
+        nextAttackTime = Time.time + attackCooldown;
+
+        Vector3 attackCenter =
+            transform.position +
+            Vector3.up * 1f +
+            transform.forward * attackRange;
+
+        Collider[] hits = Physics.OverlapSphere(
+            attackCenter,
+            attackRadius
+        );
+
+        bool hitEnemy = false;
+
+        foreach (Collider hit in hits)
+        {
+            // 자기 자신은 공격하지 않음
+            if (hit.transform.root == transform.root)
+                continue;
+
+            EnemyHealth enemy =
+                hit.GetComponentInParent<EnemyHealth>();
+
+            if (enemy == null)
+                continue;
+
+            enemy.TakeDamage(attackDamage);
+            hitEnemy = true;
+        }
+
+        if (!hitEnemy)
+        {
+            Debug.Log("Miss!");
+        }
+    }
+
+
+    // 공격 범위 확인용 임시 스크립트 
+    private void OnDrawGizmosSelected()
+    {
+        // 공격 판정 구체의 중심 위치
+        Vector3 attackCenter = transform.position + Vector3.up * 1f + transform.forward * attackRange;
+
+        // 공격 범위를 초록색 구체로 표시
+        Gizmos.color = Color.green;
+        Gizmos.DrawWireSphere(attackCenter, attackRadius);
+    }
+
+    // 대쉬/회피 - 사용 중 무적
+    public void OnDodge(InputAction.CallbackContext context)
+    {
+        if (!context.performed)
+            return;
+
+        // 대쉬 중이거나 쿨타임 중이면 회피할 수 없음
+        if (isDodging || Time.time < nextDodgeTime)
+            return;
+
+        // 카메라 기준으로 이동 방향 계산
+        Vector3 forward = cameraTransform.forward;
+        forward.y = 0f;
+        forward.Normalize();
+
+        Vector3 right = cameraTransform.right;
+        right.y = 0f;
+        right.Normalize();
+
+        Vector3 inputDirection = forward * moveInput.y + right * moveInput.x;
+
+        // 이동 입력이 있으면 그 방향으로, 없으면 플레이어가 바라보는 방향으로 대시
+        if (inputDirection.sqrMagnitude > 0.01f)
+        {
+            dodgeDirection = inputDirection.normalized;
+        }
+        else
+        {
+            dodgeDirection = transform.forward;
+        }
+
+        isDodging = true;
+        dodgeTimer = dodgeDuration;
+        invincibleTimer = invincibleDuration;
+        nextDodgeTime = Time.time + dodgeCooldown;
+    }
+
 }
