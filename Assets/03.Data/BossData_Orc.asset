@@ -18,5 +18,5 @@ MonoBehaviour:
   attackRange: 3
   moveSpeed: 3
   rotationSpeed: 5
-  attackDamage: 20
+  attackDamage: 10
   attackCooldown: 2

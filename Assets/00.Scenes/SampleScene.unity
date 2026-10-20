@@ -522,13 +522,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: c8421e2b1afd6214f8ae7b2be0c37215, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::BossController
+  bossData: {fileID: 11400000, guid: bb4b4ea0c24c84e46af3579bb97a0d3f, type: 2}
   player: {fileID: 1400854717}
-  detectionRange: 12
-  attackRange: 3
-  moveSpeed: 3
-  rotationSpeed: 5
-  attackDamage: 20
-  attackCooldown: 2
 --- !u!1 &832575517
 GameObject:
   m_ObjectHideFlags: 0
@@ -719,8 +714,8 @@ MonoBehaviour:
   attackRange: 2
   attackRadius: 1
   attackCooldown: 1
-  dodgeSpeed: 15
-  dodgeDuration: 0.2
+  dodgeSpeed: 20
+  dodgeDuration: 0.3
   invincibleDuration: 0.3
   dodgeCooldown: 2
 --- !u!114 &1400854719
