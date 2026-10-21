@@ -15,6 +15,10 @@ public class BossController : MonoBehaviour
     [Header("대상")]
     [SerializeField] private Transform player;
 
+    [Header("공격 판정")]
+    [SerializeField] private float attackRadius = 2f;
+    [SerializeField] private float attackForwardOffset = 1.5f;
+
     private BossState currentState = BossState.Idle;
     private float nextAttackTime;
 
@@ -127,25 +131,34 @@ public class BossController : MonoBehaviour
 
     private void PerformAttack()
     {
-        float distance = Vector3.Distance(transform.position,player.position);
+        Vector3 attackCenter = transform.position + transform.forward * attackForwardOffset;
+        Collider[] hits = Physics.OverlapSphere(attackCenter, attackRadius);
 
-        if (distance > bossData.attackRange)
-            return;
-
-        PlayerHealth playerHealth = player.GetComponent<PlayerHealth>();
-
-        if (playerHealth != null)
+        foreach (Collider hit in hits)
         {
-            playerHealth.TakeDamage(bossData.attackDamage);
-            Debug.Log($"{bossData.bossName}의 공격!");
+            PlayerHealth playerHealth = hit.GetComponentInParent<PlayerHealth>();
+
+            if (playerHealth != null)
+            {
+                playerHealth.TakeDamage(bossData.attackDamage);
+                Debug.Log($"{bossData.bossName}의 공격!");
+                return;
+            }
         }
     }
-
 
     private void RotateTowards(Vector3 direction)
     {
         Quaternion targetRotation = Quaternion.LookRotation(direction);
         transform.rotation = Quaternion.Slerp(transform.rotation, targetRotation, bossData.rotationSpeed * Time.deltaTime);
     }
+
+    // 공격범위 확인용, 테스트 끝나면 지울것
+    private void OnDrawGizmosSelected()
+    {
+        Gizmos.color = Color.red;
+        Vector3 attackCenter = transform.position + transform.forward * attackForwardOffset;
+        Gizmos.DrawWireSphere(attackCenter, attackRadius);
+    }
+
 }
-    
