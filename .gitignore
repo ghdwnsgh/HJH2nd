@@ -107,3 +107,8 @@ InitTestScene*.unity*
 
 # Auto-generated cache in Assets folder
 /[Aa]ssets/[Ss]ceneDependencyCache*
+
+Assets/02.Prefabs/External
+
+# 에셋 파일  제외 
+Assets/ExternalAssets
