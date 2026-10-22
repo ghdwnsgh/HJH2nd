@@ -956,6 +956,14 @@ PrefabInstance:
       propertyPath: m_Name
       value: Meshy_AI_moss_golem_textured_biped_Meshy_Merged_Animations
       objectReference: {fileID: 0}
+    - target: {fileID: 2664098864995057252, guid: bd093cbb51246df4e90180d531532b76, type: 3}
+      propertyPath: 'm_Materials.Array.data[0]'
+      value: 
+      objectReference: {fileID: 2100000, guid: 90e11d787c5c5a14aa0591d5bcf168ac, type: 2}
+    - target: {fileID: 5866666021909216657, guid: bd093cbb51246df4e90180d531532b76, type: 3}
+      propertyPath: m_Controller
+      value: 
+      objectReference: {fileID: 9100000, guid: aaec767763bec7f41ad340a046b539e0, type: 2}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
     m_AddedGameObjects: []
