@@ -15,12 +15,27 @@ public class BossController : MonoBehaviour
     [Header("대상")]
     [SerializeField] private Transform player;
 
+    [Header("애니메이션")]
+    [SerializeField] private Animator animator;
+
     [Header("공격 판정")]
     [SerializeField] private float attackRadius = 2f;
     [SerializeField] private float attackForwardOffset = 1.5f;
 
     private BossState currentState = BossState.Idle;
     private float nextAttackTime;
+
+
+    [Header("공격 애니메이션")]
+    [SerializeField] private float attackWaitTime = 1f;
+    [SerializeField] private float attackHitTime = 1.1f;
+    [SerializeField] private float attackAnimationLength = 2.2f;
+
+    private float attackWaitTimer;
+    private float attackAnimationTimer;
+    private bool isAttackAnimating;
+    private bool hasAppliedDamage;
+
 
     private void Start()
     {
@@ -73,6 +88,13 @@ public class BossController : MonoBehaviour
             Debug.Log($"{bossData.bossName} 상태 변경: " + $"{previousState} → {currentState}");
         }
 
+        if (animator != null)
+        {
+            animator.SetFloat(
+                "Speed",
+                currentState == BossState.Chase ? 1f : 0f
+            );
+        }
 
         switch (currentState)
         {
@@ -110,7 +132,6 @@ public class BossController : MonoBehaviour
         transform.position += direction * bossData.moveSpeed * Time.deltaTime;
     }
 
-
     private void Attack()
     {
         Vector3 direction = player.position - transform.position;
@@ -122,12 +143,58 @@ public class BossController : MonoBehaviour
             RotateTowards(direction);
         }
 
+        // 공격 애니메이션이 진행 중인 경우
+        if (isAttackAnimating)
+        {
+            attackAnimationTimer += Time.deltaTime;
+
+            // 애니메이션 시작 후 지정된 시점에 한 번만 피해 판정
+            if (!hasAppliedDamage &&
+                attackAnimationTimer >= attackHitTime)
+            {
+                PerformAttack();
+                hasAppliedDamage = true;
+            }
+
+            // 애니메이션 종료
+            if (attackAnimationTimer >= attackAnimationLength)
+            {
+                isAttackAnimating = false;
+                nextAttackTime = Time.time + bossData.attackCooldown;
+
+                if (animator != null)
+                {
+                    animator.SetFloat("Speed", 0f);
+                    animator.Play("Idle", 0, 0f);
+                }
+            }
+
+            return;
+        }
+
+        // 다음 공격 가능 시간이 아니라면 대기
         if (Time.time < nextAttackTime)
             return;
 
-        nextAttackTime = Time.time + bossData.attackCooldown;
-        PerformAttack();
+        // 공격 전 2초 대기
+        attackWaitTimer += Time.deltaTime;
+
+        if (attackWaitTimer >= attackWaitTime)
+        {
+            attackWaitTimer = 0f;
+            attackAnimationTimer = 0f;
+            hasAppliedDamage = false;
+            isAttackAnimating = true;
+
+            // Attack Swing 재생
+            if (animator != null)
+            {
+                animator.Play("Attack Swing", 0, 0f);
+            }
+        }
     }
+
+
 
     private void PerformAttack()
     {

@@ -17,6 +17,9 @@ public class PlayerController : MonoBehaviour
     [Header("카메라")]
     [SerializeField] private Transform cameraTransform;
 
+    [Header("애니메이션")]
+    [SerializeField] private Animator animator;
+
     [Header("공격 설정")]
     [SerializeField] private float attackDamage = 25f;
     [SerializeField] private float attackRange = 2f;
@@ -24,6 +27,27 @@ public class PlayerController : MonoBehaviour
     [SerializeField] private float attackCooldown = 0.5f;
 
     private float nextAttackTime = 0f;
+
+    [Header("공격 콤보 설정")]
+    [SerializeField] private float comboInputWindow = 0.8f;
+    [SerializeField] private float battlePoseDuration = 3f;
+
+    [Header("공격 판정 시간")]
+    [SerializeField] private float attackHitDelay = 0.4f;
+
+    private bool damageApplied = false;
+    private float attackHitTimer = 0f;
+
+
+    private int comboStep = 0;
+    private float comboTimer = 0f;
+    private float battlePoseTimer = 0f;
+    private bool isInBattlePose = false;
+
+    private bool isAttackAnimationPlaying = false;
+    private float attackAnimationTimer = 0f;
+    [SerializeField] private float attackAnimationFallbackTime = 1f;
+
 
     [Header("회피 설정")]
     [SerializeField] private float dodgeSpeed = 15f;
@@ -70,6 +94,8 @@ public class PlayerController : MonoBehaviour
         }
 
         Move();
+
+        UpdateAttackTimers();
     }
 
     private void Move()
@@ -121,6 +147,14 @@ public class PlayerController : MonoBehaviour
         velocity.y = verticalVelocity;
         controller.Move(velocity * Time.deltaTime);
 
+        // 이동 및 달리기 애니메이션 제어
+        if (animator != null)
+        {
+            float speed = moveInput.magnitude;
+            animator.SetFloat("Speed", speed);
+            animator.SetBool("IsSprinting", isSprint && speed > 0.1f);
+        }
+
     }
 
     public void OnMove(InputAction.CallbackContext context)
@@ -150,56 +184,88 @@ public class PlayerController : MonoBehaviour
         if (controller.isGrounded)
         {
             verticalVelocity = jumpPower;
+            if (animator != null)
+            {
+                animator.SetTrigger("Jump");
+            }
         }
     }
 
     // 일반공격 : 마우스 왼쪽 클릭
     public void OnAttack(InputAction.CallbackContext context)
     {
-        if (!context.performed)
-            return;
+        if (!context.performed) return;
 
-        // 공격 쿨타임
-        if (Time.time < nextAttackTime)
+        // 전투 자세 중 공격하면 새로운 콤보 시작
+        if (isInBattlePose)
         {
-            return;
+            isInBattlePose = false;
+            battlePoseTimer = 0f;
+            comboStep = 0;
         }
 
+        // 첫 공격이거나 콤보 입력 시간이 끝났다면 1단부터 시작
+        if (comboStep == 0 || comboTimer <= 0f)
+        {
+            if (Time.time < nextAttackTime) return;
+
+            comboStep = 1;
+        }
+        else
+        {
+            // 최대 3단 공격까지만 진행
+            if (comboStep >= 3) return;
+
+            comboStep++;
+        }
+
+        // 다음 콤보 입력 가능 시간 갱신
+        comboTimer = comboInputWindow;
+
+        // 다음 일반 공격 가능 시간 설정
         nextAttackTime = Time.time + attackCooldown;
 
-        Vector3 attackCenter =
-            transform.position +
-            Vector3.up * 1f +
-            transform.forward * attackRange;
+        if (animator != null)
+        {
+            animator.SetBool("IsAttacking", true);
+            animator.SetInteger("ComboStep", comboStep);
+            animator.SetTrigger("Attack");
+        }
 
-        Collider[] hits = Physics.OverlapSphere(
-            attackCenter,
-            attackRadius
-        );
+        // 공격 애니메이션 타이머 초기화
+        isAttackAnimationPlaying = true;
+        attackAnimationTimer = 0f;
 
-        bool hitEnemy = false;
+        attackHitTimer = 0f;
+        damageApplied = false;
+
+        isInBattlePose = false;
+        battlePoseTimer = 0f;
+
+    }
+
+
+    private void PerformAttackDamage()
+    {
+        Vector3 attackCenter = transform.position + Vector3.up * 1f + transform.forward * attackRange;
+
+        Collider[] hits = Physics.OverlapSphere(attackCenter, attackRadius);
 
         foreach (Collider hit in hits)
         {
-            // 자기 자신은 공격하지 않음
             if (hit.transform.root == transform.root)
                 continue;
 
-            EnemyHealth enemy =
-                hit.GetComponentInParent<EnemyHealth>();
+            EnemyHealth enemy = hit.GetComponentInParent<EnemyHealth>();
 
             if (enemy == null)
                 continue;
 
             enemy.TakeDamage(attackDamage);
-            hitEnemy = true;
-        }
-
-        if (!hitEnemy)
-        {
-            Debug.Log("Miss!");
+            Debug.Log($"{comboStep}단 공격 적중!");
         }
     }
+
 
 
     // 공격 범위 확인용 임시 스크립트 
@@ -249,5 +315,68 @@ public class PlayerController : MonoBehaviour
         invincibleTimer = invincibleDuration;
         nextDodgeTime = Time.time + dodgeCooldown;
     }
+
+
+    // 콤보 유지 관리용 타이머
+    private void UpdateAttackTimers()
+    {
+        // 다음 콤보 입력 가능 시간
+        if (comboTimer > 0f)
+        {
+            comboTimer -= Time.deltaTime;
+
+            if (comboTimer <= 0f && comboStep > 0)
+            {
+                comboTimer = 0f;
+            }
+        }
+
+
+        // 공격 애니메이션 타이머 및 피해 판정
+        if (isAttackAnimationPlaying)
+        {
+            attackAnimationTimer += Time.deltaTime;
+            attackHitTimer += Time.deltaTime;
+
+            // 지정된 타격 시점에 한 번만 피해 적용
+            if (!damageApplied && attackHitTimer >= attackHitDelay)
+            {
+                PerformAttackDamage();
+                damageApplied = true;
+            }
+
+            // 공격 애니메이션 예비 종료 시간
+            if (attackAnimationTimer >= attackAnimationFallbackTime)
+            {
+                isAttackAnimationPlaying = false;
+                isInBattlePose = true;
+                battlePoseTimer = battlePoseDuration;
+
+                if (animator != null)
+                {
+                    animator.SetBool("IsAttacking", true);
+                }
+            }
+        }
+
+
+        // 전투 자세 유지 시간
+        if (isInBattlePose)
+        {
+            battlePoseTimer -= Time.deltaTime;
+
+            if (battlePoseTimer <= 0f)
+            {
+                isInBattlePose = false;
+                comboStep = 0;
+
+                if (animator != null)
+                {
+                    animator.SetBool("IsAttacking", false);
+                }
+            }
+        }
+    }
+
 
 }
