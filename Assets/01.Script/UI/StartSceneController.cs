@@ -3,13 +3,13 @@ using UnityEngine.SceneManagement;
 
 public class StartSceneController : MonoBehaviour
 {
-    [Header("GameScene")]
-    [SerializeField] private string GameScene = "GameScene";
+    [Header("BossSelectScene")]
+    [SerializeField] private string gameSceneName = "BossSelectScene";
 
     // START 버튼
     public void StartGame()
     {
-        SceneManager.LoadScene(GameScene);
+        SceneManager.LoadScene(gameSceneName);
     }
 
     // EXIT 버튼
