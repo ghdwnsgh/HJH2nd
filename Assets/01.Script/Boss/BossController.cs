@@ -9,6 +9,15 @@ public class BossController : MonoBehaviour
         Attack
     }
 
+    private enum BossPattern
+    {
+        None,
+        ArmSwing,       // 팔 휘두르기
+        DoubleSlam,     // 양손 내려찍기
+        JumpSlam,       // 점프 내려찍기
+        Charge          // 돌진
+    }
+
     [Header("보스 데이터")]
     [SerializeField] private BossData bossData;
 
@@ -18,23 +27,39 @@ public class BossController : MonoBehaviour
     [Header("애니메이션")]
     [SerializeField] private Animator animator;
 
-    [Header("공격 판정")]
-    [SerializeField] private float attackRadius = 2f;
-    [SerializeField] private float attackForwardOffset = 1.5f;
-
     private BossState currentState = BossState.Idle;
-    private float nextAttackTime;
 
+    [Header("패턴 쿨타임")]
+    [SerializeField] private float armSwingCooldown = 10f;
+    [SerializeField] private float doubleSlamCooldown = 30f;
+    [SerializeField] private float jumpSlamCooldown = 60f;
 
-    [Header("공격 애니메이션")]
-    [SerializeField] private float attackWaitTime = 1f;
-    [SerializeField] private float attackHitTime = 1.1f;
-    [SerializeField] private float attackAnimationLength = 2.2f;
+    private float armSwingTimer;
+    private float doubleSlamTimer;
+    private float jumpSlamTimer;
 
-    private float attackWaitTimer;
-    private float attackAnimationTimer;
-    private bool isAttackAnimating;
+    [Header("팔 휘두르기 설정")]
+    [SerializeField] private float armSwingDamage = 25f;
+    [SerializeField] private float armSwingRadius = 2f;
+    [SerializeField] private float armSwingForwardOffset = 1.5f;
+
+    [SerializeField] private float armSwingWaitTime = 1f;
+    [SerializeField] private float armSwingHitTime = 1.1f;
+    [SerializeField] private float armSwingAnimationLength = 2.2f;
+
+    private float patternTimer;
     private bool hasAppliedDamage;
+
+    [Header("양손 내려찍기 설정")]
+    [SerializeField] private float doubleSlamDamage = 50f;
+    [SerializeField] private float doubleSlamRadius = 3.5f;
+    [SerializeField] private float doubleSlamForwardOffset = 2f;
+
+    [SerializeField] private float doubleSlamWaitTime = 1.5f;
+    [SerializeField] private float doubleSlamHitTime = 1.8f;
+    [SerializeField] private float doubleSlamAnimationLength = 3f;
+
+    private BossPattern currentPattern = BossPattern.None;
 
 
     private void Start()
@@ -55,11 +80,19 @@ public class BossController : MonoBehaviour
         {
             Debug.LogWarning("EnemyHealth 컴포넌트가 없습니다!", this);
         }
+
+        // 게임 시작 시 패턴 쿨타임 적용
+        armSwingTimer = armSwingCooldown;
+        doubleSlamTimer = doubleSlamCooldown;
+        jumpSlamTimer = jumpSlamCooldown;
     }
 
 
     private void Update()
     {
+        //패턴 쿨타임 감소 호출
+        UpdatePatternCooldowns();
+
         if (bossData == null || player == null)
             return;
 
@@ -134,6 +167,14 @@ public class BossController : MonoBehaviour
 
     private void Attack()
     {
+        // 패턴 실행 중에는 다른 행동을 하지 않음
+        if (currentPattern != BossPattern.None)
+        {
+            UpdatePattern();
+            return;
+        }
+
+        // 공격 시작 전까지 플레이어를 계속 바라봄
         Vector3 direction = player.position - transform.position;
         direction.y = 0f;
 
@@ -143,76 +184,70 @@ public class BossController : MonoBehaviour
             RotateTowards(direction);
         }
 
-        // 공격 애니메이션이 진행 중인 경우
-        if (isAttackAnimating)
+        // 사용 가능한 패턴 선택
+        BossPattern selectedPattern = SelectPattern();
+
+        if (selectedPattern == BossPattern.None)
         {
-            attackAnimationTimer += Time.deltaTime;
-
-            // 애니메이션 시작 후 지정된 시점에 한 번만 피해 판정
-            if (!hasAppliedDamage &&
-                attackAnimationTimer >= attackHitTime)
-            {
-                PerformAttack();
-                hasAppliedDamage = true;
-            }
-
-            // 애니메이션 종료
-            if (attackAnimationTimer >= attackAnimationLength)
-            {
-                isAttackAnimating = false;
-                nextAttackTime = Time.time + bossData.attackCooldown;
-
-                if (animator != null)
-                {
-                    animator.SetFloat("Speed", 0f);
-                    animator.Play("Idle", 0, 0f);
-                }
-            }
-
+            // 사용 가능한 패턴이 없으면 제자리 대기
             return;
         }
 
-        // 다음 공격 가능 시간이 아니라면 대기
-        if (Time.time < nextAttackTime)
-            return;
-
-        // 공격 전 2초 대기
-        attackWaitTimer += Time.deltaTime;
-
-        if (attackWaitTimer >= attackWaitTime)
-        {
-            attackWaitTimer = 0f;
-            attackAnimationTimer = 0f;
-            hasAppliedDamage = false;
-            isAttackAnimating = true;
-
-            // Attack Swing 재생
-            if (animator != null)
-            {
-                animator.Play("Attack Swing", 0, 0f);
-            }
-        }
+        StartPattern(selectedPattern);
     }
 
-
-
-    private void PerformAttack()
+    private void PerformArmSwingDamage()
     {
-        Vector3 attackCenter = transform.position + transform.forward * attackForwardOffset;
-        Collider[] hits = Physics.OverlapSphere(attackCenter, attackRadius);
+        Vector3 attackCenter =
+            transform.position +
+            transform.forward * armSwingForwardOffset;
+
+        Collider[] hits = Physics.OverlapSphere(
+            attackCenter,
+            armSwingRadius
+        );
 
         foreach (Collider hit in hits)
         {
-            PlayerHealth playerHealth = hit.GetComponentInParent<PlayerHealth>();
+            PlayerHealth playerHealth =
+                hit.GetComponentInParent<PlayerHealth>();
 
             if (playerHealth != null)
             {
-                playerHealth.TakeDamage(bossData.attackDamage);
-                Debug.Log($"{bossData.bossName}의 공격!");
+                playerHealth.TakeDamage(armSwingDamage);
+
+                Debug.Log("보스의 팔 휘두르기 적중!");
                 return;
             }
         }
     }
+
+    private void PerformDoubleSlamDamage()
+    {
+        Vector3 attackCenter =
+            transform.position +
+            transform.forward * doubleSlamForwardOffset;
+
+        Collider[] hits = Physics.OverlapSphere(
+            attackCenter,
+            doubleSlamRadius
+        );
+
+        foreach (Collider hit in hits)
+        {
+            PlayerHealth playerHealth =
+                hit.GetComponentInParent<PlayerHealth>();
+
+            if (playerHealth != null)
+            {
+                playerHealth.TakeDamage(doubleSlamDamage);
+
+                Debug.Log("보스의 양손 내려찍기 적중!");
+                return;
+            }
+        }
+    }
+
 
     private void RotateTowards(Vector3 direction)
     {
@@ -220,12 +255,169 @@ public class BossController : MonoBehaviour
         transform.rotation = Quaternion.Slerp(transform.rotation, targetRotation, bossData.rotationSpeed * Time.deltaTime);
     }
 
-    // 공격범위 확인용, 테스트 끝나면 지울것
+   
+
+    // 보스 패턴 쿨타임 감소
+    private void UpdatePatternCooldowns()
+    {
+        if (armSwingTimer > 0f)
+            armSwingTimer -= Time.deltaTime;
+
+        if (doubleSlamTimer > 0f)
+            doubleSlamTimer -= Time.deltaTime;
+
+        if (jumpSlamTimer > 0f)
+            jumpSlamTimer -= Time.deltaTime;
+    }
+
+    private BossPattern SelectPattern()
+    {
+        // 쿨타임이 긴 패턴부터 확인
+        if (jumpSlamTimer <= 0f)
+            return BossPattern.JumpSlam;
+
+        if (doubleSlamTimer <= 0f)
+            return BossPattern.DoubleSlam;
+
+        if (armSwingTimer <= 0f)
+            return BossPattern.ArmSwing;
+
+        return BossPattern.None;
+    }
+
+    // 패턴 시작
+    private void StartPattern(BossPattern pattern)
+    {
+        currentPattern = pattern;
+        patternTimer = 0f;
+        hasAppliedDamage = false;
+
+        switch (currentPattern)
+        {
+            case BossPattern.ArmSwing:
+
+                armSwingTimer = armSwingCooldown;
+
+                if (animator != null)
+                {
+                    animator.Play("Attack Swing", 0, 0f);
+                }
+
+                Debug.Log("보스 패턴 시작: 팔 휘두르기");
+                break;
+
+            case BossPattern.DoubleSlam:
+
+                doubleSlamTimer = doubleSlamCooldown;
+
+                if (animator != null)
+                {
+                    animator.Play("Double Slam", 0, 0f);
+                }
+
+                Debug.Log("보스 패턴 시작: 양손 내려찍기");
+                break;
+
+            case BossPattern.JumpSlam:
+                Debug.Log("점프 내려찍기는 아직 미구현");
+                break;
+
+            case BossPattern.Charge:
+                Debug.Log("돌진은 아직 미구현");
+                break;
+        }
+    }
+
+    //패턴 진행
+    private void UpdatePattern()
+    {
+        patternTimer += Time.deltaTime;
+
+        switch (currentPattern)
+        {
+            case BossPattern.ArmSwing:
+
+                // 공격 애니메이션의 지정된 시점에 피해 적용
+                if (!hasAppliedDamage &&
+                    patternTimer >= armSwingHitTime)
+                {
+                    PerformArmSwingDamage();
+                    hasAppliedDamage = true;
+                }
+
+                // 공격 애니메이션 종료
+                if (patternTimer >= armSwingAnimationLength)
+                {
+                    EndPattern();
+                }
+
+                break;
+
+
+            case BossPattern.DoubleSlam:
+
+                // 공격 판정
+                if (!hasAppliedDamage &&
+                    patternTimer >= doubleSlamHitTime)
+                {
+                    PerformDoubleSlamDamage();
+                    hasAppliedDamage = true;
+                }
+
+                // 애니메이션 종료
+                if (patternTimer >= doubleSlamAnimationLength)
+                {
+                    EndPattern();
+                }
+
+                break;
+        }
+    }
+
+
+    //패턴 종료
+    private void EndPattern()
+    {
+        Debug.Log($"보스 패턴 종료: {currentPattern}");
+
+        currentPattern = BossPattern.None;
+        patternTimer = 0f;
+
+        if (animator != null)
+        {
+            animator.SetFloat("Speed", 0f);
+            animator.Play("Idle", 0, 0f);
+        }
+    }
+
+
+    //공격범위 확인용
     private void OnDrawGizmosSelected()
     {
+        // 팔 휘두르기 범위
         Gizmos.color = Color.red;
-        Vector3 attackCenter = transform.position + transform.forward * attackForwardOffset;
-        Gizmos.DrawWireSphere(attackCenter, attackRadius);
+
+        Vector3 armSwingCenter =
+            transform.position +
+            transform.forward * armSwingForwardOffset;
+
+        Gizmos.DrawWireSphere(
+            armSwingCenter,
+            armSwingRadius
+        );
+
+        // 양손 내려찍기 범위
+        Gizmos.color = Color.yellow;
+
+        Vector3 doubleSlamCenter =
+            transform.position +
+            transform.forward * doubleSlamForwardOffset;
+
+        Gizmos.DrawWireSphere(
+            doubleSlamCenter,
+            doubleSlamRadius
+        );
     }
+
 
 }

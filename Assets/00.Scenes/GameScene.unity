@@ -175,6 +175,10 @@ PrefabInstance:
       propertyPath: m_Controller
       value: 
       objectReference: {fileID: 9100000, guid: e507aecafb8f26d47b8ddd4dcb6e48c5, type: 2}
+    - target: {fileID: 5866666021909216657, guid: 356faa129b533724296806172322518d, type: 3}
+      propertyPath: m_ApplyRootMotion
+      value: 0
+      objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
     m_AddedGameObjects: []
@@ -934,14 +938,23 @@ MonoBehaviour:
   bossData: {fileID: 11400000, guid: bb4b4ea0c24c84e46af3579bb97a0d3f, type: 2}
   player: {fileID: 1400854717}
   animator: {fileID: 2066285420}
-  attackRadius: 2
-  attackForwardOffset: 1.5
-  attackWaitTime: 2
-  attackHitTime: 1.1
-  attackAnimationLength: 2.2
+  armSwingCooldown: 10
+  doubleSlamCooldown: 30
+  jumpSlamCooldown: 60
+  armSwingDamage: 25
+  armSwingRadius: 2
+  armSwingForwardOffset: 1.5
+  armSwingWaitTime: 1
+  armSwingHitTime: 1.1
+  armSwingAnimationLength: 2.2
 --- !u!4 &592420073 stripped
 Transform:
   m_CorrespondingSourceObject: {fileID: -8679921383154817045, guid: 356faa129b533724296806172322518d, type: 3}
+  m_PrefabInstance: {fileID: 49494749}
+  m_PrefabAsset: {fileID: 0}
+--- !u!95 &592420074 stripped
+Animator:
+  m_CorrespondingSourceObject: {fileID: 5866666021909216657, guid: 356faa129b533724296806172322518d, type: 3}
   m_PrefabInstance: {fileID: 49494749}
   m_PrefabAsset: {fileID: 0}
 --- !u!1 &722289317
@@ -1361,14 +1374,14 @@ MonoBehaviour:
   jumpPower: 7
   gravity: -20
   cameraTransform: {fileID: 330585546}
-  animator: {fileID: 906793547141491143}
+  animator: {fileID: 592420074}
   attackDamage: 25
   attackRange: 2
   attackRadius: 1
   attackCooldown: 1
+  comboEndNormalizedTime: 0.95
   comboInputWindow: 0.8
-  battlePoseDuration: 3
-  attackHitDelay: 0.4
+  attackHitNormalizedTime: 0.45
   attackAnimationFallbackTime: 1
   dodgeSpeed: 20
   dodgeDuration: 0.3
@@ -1662,11 +1675,15 @@ MonoBehaviour:
   bossData: {fileID: 11400000, guid: bb4b4ea0c24c84e46af3579bb97a0d3f, type: 2}
   player: {fileID: 1400854717}
   animator: {fileID: 0}
-  attackRadius: 2
-  attackForwardOffset: 1.5
-  attackWaitTime: 2
-  attackHitTime: 1.1
-  attackAnimationLength: 2.2
+  armSwingCooldown: 10
+  doubleSlamCooldown: 30
+  jumpSlamCooldown: 60
+  armSwingDamage: 25
+  armSwingRadius: 2
+  armSwingForwardOffset: 1.5
+  armSwingWaitTime: 1
+  armSwingHitTime: 1.1
+  armSwingAnimationLength: 2.2
 --- !u!114 &1578418645
 MonoBehaviour:
   m_ObjectHideFlags: 0

@@ -1,5 +1,4 @@
-﻿
-using UnityEngine;
+﻿using UnityEngine;
 using UnityEngine.InputSystem;
 
 [RequireComponent(typeof(CharacterController))]
@@ -28,24 +27,26 @@ public class PlayerController : MonoBehaviour
 
     private float nextAttackTime = 0f;
 
+    [Header("콤보 애니메이션 설정")]
+    [SerializeField] private float comboEndNormalizedTime = 0.95f;
+    private bool isAttackAnimationPlaying = false;
+
     [Header("공격 콤보 설정")]
-    [SerializeField] private float comboInputWindow = 0.8f;
-    [SerializeField] private float battlePoseDuration = 3f;
+    [SerializeField] private float comboInputWindow = 1.2f;
 
     [Header("공격 판정 시간")]
-    [SerializeField] private float attackHitDelay = 0.4f;
+    [SerializeField, Range(0f, 1f)]
+    private float attackHitNormalizedTime = 0.45f;
 
     private bool damageApplied = false;
-    private float attackHitTimer = 0f;
+
+    private int lastAttackStateHash = 0;
 
 
     private int comboStep = 0;
     private float comboTimer = 0f;
-    private float battlePoseTimer = 0f;
-    private bool isInBattlePose = false;
 
-    private bool isAttackAnimationPlaying = false;
-    private float attackAnimationTimer = 0f;
+    //private float attackAnimationTimer = 0f;
     [SerializeField] private float attackAnimationFallbackTime = 1f;
 
 
@@ -96,6 +97,7 @@ public class PlayerController : MonoBehaviour
         Move();
 
         UpdateAttackTimers();
+        UpdateAttackAnimation();
     }
 
     private void Move()
@@ -113,8 +115,8 @@ public class PlayerController : MonoBehaviour
 
         moveDirection = Vector3.ClampMagnitude(moveDirection, 1f);
 
-        // 이동 방향으로 회전
-        if (moveDirection.sqrMagnitude > 0.01f)
+        // 회피 중에는 회전하지 않고, 일반 이동 중에만 회전
+        if (!isDodging && moveDirection.sqrMagnitude > 0.01f)
         {
             Quaternion targetRotation = Quaternion.LookRotation(moveDirection);
             transform.rotation = Quaternion.Slerp(transform.rotation, targetRotation, rotateSpeed * Time.deltaTime);
@@ -194,54 +196,49 @@ public class PlayerController : MonoBehaviour
     // 일반공격 : 마우스 왼쪽 클릭
     public void OnAttack(InputAction.CallbackContext context)
     {
-        if (!context.performed) return;
+        if (!context.performed)
+            return;
 
-        // 전투 자세 중 공격하면 새로운 콤보 시작
-        if (isInBattlePose)
-        {
-            isInBattlePose = false;
-            battlePoseTimer = 0f;
-            comboStep = 0;
-        }
-
-        // 첫 공격이거나 콤보 입력 시간이 끝났다면 1단부터 시작
+        // 첫 공격 또는 콤보 입력 시간이 끝났다면 1타부터 시작
         if (comboStep == 0 || comboTimer <= 0f)
         {
-            if (Time.time < nextAttackTime) return;
+            if (Time.time < nextAttackTime)
+                return;
 
             comboStep = 1;
+
+            if (animator != null)
+            {
+                animator.SetInteger("ComboStep", comboStep);
+                animator.SetBool("IsAttacking", true);
+                animator.SetTrigger("Attack");
+            }
         }
         else
         {
-            // 최대 3단 공격까지만 진행
-            if (comboStep >= 3) return;
+            // 최대 3단 공격
+            if (comboStep >= 3)
+                return;
 
             comboStep++;
+
+            if (animator != null)
+            {
+                animator.SetInteger("ComboStep", comboStep);
+            }
         }
 
-        // 다음 콤보 입력 가능 시간 갱신
+        // 콤보 입력 가능 시간 갱신
         comboTimer = comboInputWindow;
 
-        // 다음 일반 공격 가능 시간 설정
         nextAttackTime = Time.time + attackCooldown;
 
-        if (animator != null)
-        {
-            animator.SetBool("IsAttacking", true);
-            animator.SetInteger("ComboStep", comboStep);
-            animator.SetTrigger("Attack");
-        }
+        //// 공격 판정 초기화
+        //isAttackAnimationPlaying = true;
+        //damageApplied = false;
 
-        // 공격 애니메이션 타이머 초기화
+        // 공격 애니메이션 재생 상태 활성화
         isAttackAnimationPlaying = true;
-        attackAnimationTimer = 0f;
-
-        attackHitTimer = 0f;
-        damageApplied = false;
-
-        isInBattlePose = false;
-        battlePoseTimer = 0f;
-
     }
 
 
@@ -300,7 +297,7 @@ public class PlayerController : MonoBehaviour
 
         Vector3 inputDirection = forward * moveInput.y + right * moveInput.x;
 
-        // 이동 입력이 있으면 그 방향으로, 없으면 플레이어가 바라보는 방향으로 대시
+        // 이동 입력이 있으면 그 방향으로, 없으면 플레이어가 바라보는 방향으로 회피
         if (inputDirection.sqrMagnitude > 0.01f)
         {
             dodgeDirection = inputDirection.normalized;
@@ -310,73 +307,95 @@ public class PlayerController : MonoBehaviour
             dodgeDirection = transform.forward;
         }
 
+        // 회피 방향으로 캐릭터 회전
+        transform.rotation = Quaternion.LookRotation(dodgeDirection);
+
         isDodging = true;
         dodgeTimer = dodgeDuration;
         invincibleTimer = invincibleDuration;
         nextDodgeTime = Time.time + dodgeCooldown;
+
+        // 구르기 애니메이션 실행
+        if (animator != null)
+        {
+            animator.SetTrigger("Roll");
+        }
     }
 
-
-    // 콤보 유지 관리용 타이머
+    // 콤보 및 공격 타이머 관리
     private void UpdateAttackTimers()
     {
-        // 다음 콤보 입력 가능 시간
+        // 콤보 입력 시간 관리
         if (comboTimer > 0f)
         {
             comboTimer -= Time.deltaTime;
 
-            if (comboTimer <= 0f && comboStep > 0)
+            if (comboTimer <= 0f)
             {
                 comboTimer = 0f;
-            }
-        }
-
-
-        // 공격 애니메이션 타이머 및 피해 판정
-        if (isAttackAnimationPlaying)
-        {
-            attackAnimationTimer += Time.deltaTime;
-            attackHitTimer += Time.deltaTime;
-
-            // 지정된 타격 시점에 한 번만 피해 적용
-            if (!damageApplied && attackHitTimer >= attackHitDelay)
-            {
-                PerformAttackDamage();
-                damageApplied = true;
-            }
-
-            // 공격 애니메이션 예비 종료 시간
-            if (attackAnimationTimer >= attackAnimationFallbackTime)
-            {
-                isAttackAnimationPlaying = false;
-                isInBattlePose = true;
-                battlePoseTimer = battlePoseDuration;
-
-                if (animator != null)
-                {
-                    animator.SetBool("IsAttacking", true);
-                }
-            }
-        }
-
-
-        // 전투 자세 유지 시간
-        if (isInBattlePose)
-        {
-            battlePoseTimer -= Time.deltaTime;
-
-            if (battlePoseTimer <= 0f)
-            {
-                isInBattlePose = false;
                 comboStep = 0;
 
                 if (animator != null)
                 {
-                    animator.SetBool("IsAttacking", false);
+                    animator.SetInteger("ComboStep", 0);
                 }
             }
         }
     }
 
+    // 공격 애니메이션 종료 시 호출
+    public void OnAttackAnimationEnd()
+    {
+        isAttackAnimationPlaying = false;
 
+        if (comboTimer <= 0f)
+        {
+            comboStep = 0;
+
+            if (animator != null)
+            {
+                animator.SetBool("IsAttacking", false);
+                animator.SetInteger("ComboStep", 0);
+            }
+        }
+    }
+
+
+    private void UpdateAttackAnimation()
+    {
+        if (animator == null)
+            return;
+
+        AnimatorStateInfo stateInfo =
+            animator.GetCurrentAnimatorStateInfo(0);
+
+        // 현재 재생 중인 공격 애니메이션인지 확인
+        bool isComboAnimation =
+            stateInfo.IsName("Combo1") ||
+            stateInfo.IsName("Combo2") ||
+            stateInfo.IsName("Combo3");
+
+        if (!isComboAnimation)
+        {
+            lastAttackStateHash = 0;
+            return;
+        }
+
+        // 공격 애니메이션이 변경되었는지 확인
+        int currentHash = stateInfo.shortNameHash;
+
+        if (lastAttackStateHash != currentHash)
+        {
+            lastAttackStateHash = currentHash;
+            damageApplied = false;
+        }
+
+        // 애니메이션 진행률이 설정한 지점에 도달하면 데미지 적용
+        if (!damageApplied &&
+            stateInfo.normalizedTime >= attackHitNormalizedTime)
+        {
+            PerformAttackDamage();
+            damageApplied = true;
+        }
+    }
 }
