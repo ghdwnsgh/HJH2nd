@@ -947,6 +947,12 @@ MonoBehaviour:
   armSwingWaitTime: 1
   armSwingHitTime: 1.1
   armSwingAnimationLength: 2.2
+  doubleSlamDamage: 50
+  doubleSlamRadius: 3.5
+  doubleSlamForwardOffset: 2
+  doubleSlamWaitTime: 1.5
+  doubleSlamHitTime: 1.8
+  doubleSlamAnimationLength: 3
 --- !u!4 &592420073 stripped
 Transform:
   m_CorrespondingSourceObject: {fileID: -8679921383154817045, guid: 356faa129b533724296806172322518d, type: 3}
@@ -1684,6 +1690,12 @@ MonoBehaviour:
   armSwingWaitTime: 1
   armSwingHitTime: 1.1
   armSwingAnimationLength: 2.2
+  doubleSlamDamage: 50
+  doubleSlamRadius: 3.5
+  doubleSlamForwardOffset: 2
+  doubleSlamWaitTime: 1.5
+  doubleSlamHitTime: 1.8
+  doubleSlamAnimationLength: 3
 --- !u!114 &1578418645
 MonoBehaviour:
   m_ObjectHideFlags: 0
