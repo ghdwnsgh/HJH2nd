@@ -66,6 +66,23 @@ public class PlayerController : MonoBehaviour
     public bool IsInvincible => invincibleTimer > 0f;
 
 
+    [Header("피격 설정")]
+    [SerializeField] private float hitKnockbackDistance = 0.3f;
+
+    private bool isHitStunned;
+    private float hitStunTimer;
+    private Vector3 hitKnockbackVelocity;
+
+
+    [Header("패링 설정")]
+    [SerializeField] private float parryDuration = 0.25f;
+    [SerializeField] private float parryCooldown = 1f;
+
+    private bool isParrying;
+    private float parryTimer;
+    private float nextParryTime;
+
+
     private CharacterController controller;
 
     private Vector2 moveInput;
@@ -94,6 +111,29 @@ public class PlayerController : MonoBehaviour
             invincibleTimer -= Time.deltaTime;
         }
 
+        // 피격 경직 시간 처리
+        if (isHitStunned)
+        {
+            hitStunTimer -= Time.deltaTime;
+
+            if (hitStunTimer <= 0f)
+            {
+                isHitStunned = false;
+                hitKnockbackVelocity = Vector3.zero;
+            }
+        }
+
+        // 패링 판정 시간 처리
+        if (isParrying)
+        {
+            parryTimer -= Time.deltaTime;
+
+            if (parryTimer <= 0f)
+            {
+                isParrying = false;
+            }
+        }
+
         Move();
 
         UpdateAttackTimers();
@@ -116,7 +156,7 @@ public class PlayerController : MonoBehaviour
         moveDirection = Vector3.ClampMagnitude(moveDirection, 1f);
 
         // 회피 중에는 회전하지 않고, 일반 이동 중에만 회전
-        if (!isDodging && moveDirection.sqrMagnitude > 0.01f)
+        if (!isDodging && !isHitStunned && moveDirection.sqrMagnitude > 0.01f)
         {
             Quaternion targetRotation = Quaternion.LookRotation(moveDirection);
             transform.rotation = Quaternion.Slerp(transform.rotation, targetRotation, rotateSpeed * Time.deltaTime);
@@ -135,9 +175,13 @@ public class PlayerController : MonoBehaviour
 
         Vector3 velocity;
 
-        if (isDodging)
+        if (isHitStunned)
         {
-            // 회피 중에는 지정된 방향으로 빠르게 이동
+            // 피격 경직 중에는 넉백만 적용
+            velocity = hitKnockbackVelocity;
+        }
+        else if (isDodging)
+        {
             velocity = dodgeDirection * dodgeSpeed;
         }
         else
@@ -154,13 +198,18 @@ public class PlayerController : MonoBehaviour
         {
             float speed = moveInput.magnitude;
             animator.SetFloat("Speed", speed);
-            animator.SetBool("IsSprinting", isSprint && speed > 0.1f);
+            animator.SetBool("IsSprinting", !isHitStunned && isSprint && speed > 0.1f);
         }
 
     }
 
     public void OnMove(InputAction.CallbackContext context)
     {
+        if (isHitStunned)
+        {
+            moveInput = Vector2.zero;
+            return;
+        }
         moveInput = context.ReadValue<Vector2>();
     }
 
@@ -182,6 +231,8 @@ public class PlayerController : MonoBehaviour
         if (!context.performed)
             return;
 
+        if (isHitStunned) return;
+
         // 바닥에 있을 때만 점프
         if (controller.isGrounded)
         {
@@ -198,6 +249,8 @@ public class PlayerController : MonoBehaviour
     {
         if (!context.performed)
             return;
+
+        if (isHitStunned) return;
 
         // 첫 공격 또는 콤보 입력 시간이 끝났다면 1타부터 시작
         if (comboStep == 0 || comboTimer <= 0f)
@@ -259,7 +312,7 @@ public class PlayerController : MonoBehaviour
                 continue;
 
             enemy.TakeDamage(attackDamage);
-            Debug.Log($"{comboStep}단 공격 적중!");
+            //Debug.Log($"{comboStep}단 공격 적중");
         }
     }
 
@@ -281,6 +334,8 @@ public class PlayerController : MonoBehaviour
     {
         if (!context.performed)
             return;
+
+        if (isHitStunned) return;
 
         // 대쉬 중이거나 쿨타임 중이면 회피할 수 없음
         if (isDodging || Time.time < nextDodgeTime)
@@ -318,6 +373,12 @@ public class PlayerController : MonoBehaviour
         // 구르기 애니메이션 실행
         if (animator != null)
         {
+            // 회피 사용시 공격 모션, 콤보 초기화
+            animator.SetBool("IsAttacking", false);
+            animator.SetInteger("ComboStep", 0);
+            animator.ResetTrigger("Attack");
+
+            // 구르기 애니메이션 실행
             animator.SetTrigger("Roll");
         }
     }
@@ -397,5 +458,85 @@ public class PlayerController : MonoBehaviour
             PerformAttackDamage();
             damageApplied = true;
         }
+    }
+
+    //피격
+    public void ApplyHit(float stunDuration, Vector3 attackerPosition)
+    {
+        // 이미 경직 중이라면 경직 시간을 연장하지 않음
+        if (isHitStunned)
+            return;
+
+        // 회피 중이거나 무적 상태라면 피격 처리하지 않음
+        if (IsInvincible)
+            return;
+
+        isHitStunned = true;
+        hitStunTimer = stunDuration;
+
+        // 공격자 반대 방향 계산
+        Vector3 knockbackDirection = transform.position - attackerPosition;
+        knockbackDirection.y = 0f;
+
+        if (knockbackDirection.sqrMagnitude < 0.001f)
+            knockbackDirection = -transform.forward;
+
+        knockbackDirection.Normalize();
+
+        // 경직 시간 동안 설정한 거리만큼 밀려남
+        hitKnockbackVelocity =
+            knockbackDirection * (hitKnockbackDistance / stunDuration);
+
+        // 기존 콤보 초기화
+        comboStep = 0;
+        comboTimer = 0f;
+        isAttackAnimationPlaying = false;
+        damageApplied = false;
+        lastAttackStateHash = 0;
+
+        // 애니메이터 공격 상태 초기화
+        if (animator != null)
+        {
+            animator.SetBool("IsAttacking", false);
+            animator.SetInteger("ComboStep", 0);
+            animator.ResetTrigger("Attack");
+
+            // 피격 애니메이션 실행
+            animator.SetTrigger("Hit");
+        }
+    }
+
+    public void OnParry(InputAction.CallbackContext context)
+    {
+        if (!context.performed) return;
+
+        if (isHitStunned || isDodging || isParrying)
+            return;
+
+        if (Time.time < nextParryTime)
+            return;
+
+        isParrying = true;
+        parryTimer = parryDuration;
+        nextParryTime = Time.time + parryCooldown;
+
+        if (animator != null)
+        {
+            animator.Play("Block", 0, 0f);
+        }
+
+        Debug.Log("패링");
+    }
+
+
+    public bool TryParry()
+    {
+        if (!isParrying)
+            return false;
+
+        isParrying = false;
+
+        Debug.Log("패링 성공");
+        return true;
     }
 }

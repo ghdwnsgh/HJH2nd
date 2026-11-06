@@ -20,17 +20,23 @@ public class PlayerHealth : MonoBehaviour
         playerController = GetComponent<PlayerController>();
     }
 
-    public void TakeDamage(float damage)
+    public void TakeDamage(float damage, float stunDuration, Vector3 attackerPosition)
     {
         // 이미 사망했다면 피해를 받지 않음
         if (isDead)
             return;
 
-        // 회피 무적 시간 중에는 피해를 받지 않음
-        if (playerController != null &&
-            playerController.IsInvincible)
+        // 회피 무적 시간 중에는 피해와 피격 모션 무시
+        if (playerController != null && playerController.IsInvincible)
         {
-            Debug.Log("회피 성공! 피해를 받지 않았습니다.");
+            Debug.Log("회피 성공");
+            return;
+        }
+
+        // 패링 성공 시 피해 무효화
+        if (playerController != null && playerController.TryParry())
+        {
+            Debug.Log("패링 성공");
             return;
         }
 
@@ -42,6 +48,13 @@ public class PlayerHealth : MonoBehaviour
         if (currentHealth <= 0f)
         {
             Die();
+            return;
+        }
+
+        // 체력이 남아 있다면 피격 처리
+        if (playerController != null)
+        {
+            playerController.ApplyHit(stunDuration, attackerPosition);
         }
     }
 
@@ -52,7 +65,7 @@ public class PlayerHealth : MonoBehaviour
 
         isDead = true;
 
-        Debug.Log("플레이어 사망!");
+        Debug.Log("플레이어 사망");
 
         // 플레이어 조작 비활성화
         if (playerController != null)
