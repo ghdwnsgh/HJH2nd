@@ -83,6 +83,19 @@ public class PlayerController : MonoBehaviour
     private float nextParryTime;
 
 
+    [Header("공격 VFX")]
+    [SerializeField] private ParticleSystem slashVFX;
+
+    [SerializeField] private Vector3 slash1Rotation;
+    [SerializeField] private Vector3 slash2Rotation;
+    [SerializeField] private Vector3 slash3Rotation;
+
+    [Header("VFX 재생 타이밍")]
+    [SerializeField, Range(0f, 1f)]
+    private float slashVfxNormalizedTime = 0.35f;
+
+    private bool slashVfxApplied;
+
     private CharacterController controller;
 
     private Vector2 moveInput;
@@ -424,34 +437,47 @@ public class PlayerController : MonoBehaviour
 
     private void UpdateAttackAnimation()
     {
-        if (animator == null)
-            return;
+        if (animator == null) return;
 
         AnimatorStateInfo stateInfo =
             animator.GetCurrentAnimatorStateInfo(0);
 
-        // 현재 재생 중인 공격 애니메이션인지 확인
-        bool isComboAnimation =
-            stateInfo.IsName("Combo1") ||
-            stateInfo.IsName("Combo2") ||
-            stateInfo.IsName("Combo3");
+        int attackStep = 0;
 
-        if (!isComboAnimation)
+        if (stateInfo.IsName("Combo1"))
+            attackStep = 1;
+        else if (stateInfo.IsName("Combo2"))
+            attackStep = 2;
+        else if (stateInfo.IsName("Combo3"))
+            attackStep = 3;
+
+        // 공격 애니메이션이 아니면 초기화
+        if (attackStep == 0)
         {
             lastAttackStateHash = 0;
             return;
         }
 
-        // 공격 애니메이션이 변경되었는지 확인
         int currentHash = stateInfo.shortNameHash;
 
+        // 새로운 공격 애니메이션 시작
         if (lastAttackStateHash != currentHash)
         {
             lastAttackStateHash = currentHash;
+
             damageApplied = false;
+            slashVfxApplied = false;
         }
 
-        // 애니메이션 진행률이 설정한 지점에 도달하면 데미지 적용
+        // 검을 휘두르는 시점에 VFX 재생
+        if (!slashVfxApplied &&
+            stateInfo.normalizedTime >= slashVfxNormalizedTime)
+        {
+            PlaySlashVFX(attackStep);
+            slashVfxApplied = true;
+        }
+
+        // 기존 공격 데미지 판정
         if (!damageApplied &&
             stateInfo.normalizedTime >= attackHitNormalizedTime)
         {
@@ -539,4 +565,32 @@ public class PlayerController : MonoBehaviour
         Debug.Log("패링 성공");
         return true;
     }
+
+    private void PlaySlashVFX(int attackStep)
+    {
+        if (slashVFX == null)
+            return;
+
+        Transform vfxTransform = slashVFX.transform;
+
+        switch (attackStep)
+        {
+            case 1:
+                vfxTransform.localEulerAngles = slash1Rotation;
+                break;
+
+            case 2:
+                vfxTransform.localEulerAngles = slash2Rotation;
+                break;
+
+            case 3:
+                vfxTransform.localEulerAngles = slash3Rotation;
+                break;
+        }
+
+        slashVFX.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear);
+        slashVFX.Play();
+    }
+
+
 }
