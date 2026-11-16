@@ -59,6 +59,11 @@ public class BossController : MonoBehaviour
     [SerializeField] private float doubleSlamHitTime = 1.8f;
     [SerializeField] private float doubleSlamAnimationLength = 3f;
 
+    [Header("양손 내려찍기 VFX")]
+    [SerializeField] private ParticleSystem doubleSlamDust;
+    [SerializeField] private ParticleSystem doubleSlamRock;
+
+
     [Header("점프 내려찍기 설정")]
     [SerializeField] private float jumpSlamRadius = 4.5f;
     [SerializeField] private float jumpSlamWaitTime = 0.7f;
@@ -269,6 +274,7 @@ public class BossController : MonoBehaviour
 
     private void PerformDoubleSlamDamage()
     {
+        PlayDoubleSlamVFX();
         Vector3 attackCenter = transform.position + transform.forward * doubleSlamForwardOffset;
         Collider[] hits = Physics.OverlapSphere(attackCenter, doubleSlamRadius);
 
@@ -570,39 +576,34 @@ public class BossController : MonoBehaviour
     {
         // 팔 휘두르기 범위
         Gizmos.color = Color.red;
-
-        Vector3 armSwingCenter =
-            transform.position +
-            transform.forward * armSwingForwardOffset;
-
-        Gizmos.DrawWireSphere(
-            armSwingCenter,
-            armSwingRadius
-        );
+        Vector3 armSwingCenter = transform.position + transform.forward * armSwingForwardOffset;
+        Gizmos.DrawWireSphere(armSwingCenter,armSwingRadius);
 
         // 양손 내려찍기 범위
         Gizmos.color = Color.yellow;
-
-        Vector3 doubleSlamCenter =
-            transform.position +
-            transform.forward * doubleSlamForwardOffset;
-
-        Gizmos.DrawWireSphere(
-            doubleSlamCenter,
-            doubleSlamRadius
-        );
+        Vector3 doubleSlamCenter = transform.position + transform.forward * doubleSlamForwardOffset;
+        Gizmos.DrawWireSphere(doubleSlamCenter,doubleSlamRadius);
 
 
         // 점프 내려찍기 착지 범위
         Gizmos.color = Color.cyan;
-
-        Gizmos.DrawWireSphere(
-            jumpSlamTargetPosition,
-            jumpSlamRadius
-        );
+        Gizmos.DrawWireSphere(jumpSlamTargetPosition, jumpSlamRadius);
     }
 
+    private void PlayDoubleSlamVFX()
+    {
+        if (doubleSlamDust != null)
+        {
+            doubleSlamDust.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear);
+            doubleSlamDust.Play();
+        }
 
+        if (doubleSlamRock != null)
+        {
+            doubleSlamRock.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear);
+            doubleSlamRock.Play();
+        }
+    }
 
 
 }

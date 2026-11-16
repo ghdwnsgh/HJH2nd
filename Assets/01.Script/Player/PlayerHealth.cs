@@ -1,10 +1,14 @@
-﻿
-using UnityEngine;
+﻿using UnityEngine;
+using System.Collections;
 
 public class PlayerHealth : MonoBehaviour
 {
     [Header("체력 설정")]
     [SerializeField] private float maxHealth = 100f;
+
+    [Header("사망 애니메이션")]
+    [SerializeField] private Animator animator;
+    [SerializeField] private float deathAnimationLength = 3f;
 
     private float currentHealth;
     private bool isDead;
@@ -22,18 +26,15 @@ public class PlayerHealth : MonoBehaviour
 
     public void TakeDamage(float damage, float stunDuration, Vector3 attackerPosition)
     {
-        // 이미 사망했다면 피해를 받지 않음
         if (isDead)
             return;
 
-        // 회피 무적 시간 중에는 피해와 피격 모션 무시
         if (playerController != null && playerController.IsInvincible)
         {
             Debug.Log("회피 성공");
             return;
         }
 
-        // 패링 성공 시 피해 무효화
         if (playerController != null && playerController.TryParry())
         {
             Debug.Log("패링 성공");
@@ -51,7 +52,6 @@ public class PlayerHealth : MonoBehaviour
             return;
         }
 
-        // 체력이 남아 있다면 피격 처리
         if (playerController != null)
         {
             playerController.ApplyHit(stunDuration, attackerPosition);
@@ -69,12 +69,24 @@ public class PlayerHealth : MonoBehaviour
 
         // 플레이어 조작 비활성화
         if (playerController != null)
-        {
             playerController.enabled = false;
-        }
 
-        Destroy(gameObject);
+        // 사망 애니메이션 재생
+        if (animator != null)
+            animator.Play("Death", 0, 0f);
+
+        StartCoroutine(DeathSequence());
     }
 
+    private IEnumerator DeathSequence()
+    {
+        yield return new WaitForSeconds(deathAnimationLength);
 
+        // 플레이어 사망 후 게임오버 UI 표시
+        MutantBossDefeatUI defeatUI =
+            FindFirstObjectByType<MutantBossDefeatUI>();
+
+        if (defeatUI != null)
+            defeatUI.ShowPlayerDeathPanel();
+    }
 }

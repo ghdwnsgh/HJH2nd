@@ -1,4 +1,5 @@
 ﻿using UnityEngine;
+using UnityEngine.EventSystems;
 using UnityEngine.InputSystem;
 
 [RequireComponent(typeof(CharacterController))]
@@ -82,6 +83,10 @@ public class PlayerController : MonoBehaviour
     private float parryTimer;
     private float nextParryTime;
 
+    [Header("패링 이펙트")]
+    [SerializeField] private GameObject parryEffect;
+    [SerializeField] private float parryEffectDuration = 0.5f;
+
 
     [Header("공격 VFX")]
     [SerializeField] private ParticleSystem slashVFX;
@@ -95,6 +100,28 @@ public class PlayerController : MonoBehaviour
     private float slashVfxNormalizedTime = 0.35f;
 
     private bool slashVfxApplied;
+
+
+    [Header("공격 사운드")]
+    [SerializeField] private AudioSource attackAudioSource;
+    [SerializeField] private AudioClip[] attackSounds;
+
+    [Header("패링 사운드")]
+    [SerializeField] private AudioSource parryAudioSource;
+    [SerializeField] private AudioClip parrySound;
+
+    [Header("발소리 설정")]
+    [SerializeField] private AudioSource footstepAudioSource;
+    [SerializeField] private AudioClip[] footstepSounds;
+
+    [SerializeField] private float walkStepInterval = 0.55f;
+    [SerializeField] private float runStepInterval = 0.3f;
+
+    private float footstepTimer;
+
+    [Header("회피 사운드")]
+    [SerializeField] private AudioSource dodgeAudioSource;
+    [SerializeField] private AudioClip dodgeSound;
 
     private CharacterController controller;
 
@@ -144,10 +171,14 @@ public class PlayerController : MonoBehaviour
             if (parryTimer <= 0f)
             {
                 isParrying = false;
+
+                if (parryEffect != null)
+                    parryEffect.SetActive(false);
             }
         }
 
         Move();
+        UpdateFootsteps();
 
         UpdateAttackTimers();
         UpdateAttackAnimation();
@@ -279,6 +310,7 @@ public class PlayerController : MonoBehaviour
                 animator.SetBool("IsAttacking", true);
                 animator.SetTrigger("Attack");
             }
+            PlayAttackSound();
         }
         else
         {
@@ -292,6 +324,7 @@ public class PlayerController : MonoBehaviour
             {
                 animator.SetInteger("ComboStep", comboStep);
             }
+            PlayAttackSound();
         }
 
         // 콤보 입력 가능 시간 갱신
@@ -319,13 +352,31 @@ public class PlayerController : MonoBehaviour
             if (hit.transform.root == transform.root)
                 continue;
 
+            // 일반 보스 공격
             EnemyHealth enemy = hit.GetComponentInParent<EnemyHealth>();
 
-            if (enemy == null)
+            if (enemy != null)
+            {
+                enemy.TakeDamage(attackDamage);
                 continue;
+            }
 
-            enemy.TakeDamage(attackDamage);
-            //Debug.Log($"{comboStep}단 공격 적중");
+            // 추가 보스 공격
+            BossHealth boss = hit.GetComponentInParent<BossHealth>();
+
+            if (boss != null)
+            {
+                boss.TakeDamage(attackDamage);
+                continue;
+            }
+
+            // 제단 공격
+            AltarHealth altar = hit.GetComponentInParent<AltarHealth>();
+
+            if (altar != null)
+            {
+                altar.TakeDamage(attackDamage);
+            }
         }
     }
 
@@ -379,6 +430,11 @@ public class PlayerController : MonoBehaviour
         transform.rotation = Quaternion.LookRotation(dodgeDirection);
 
         isDodging = true;
+        // 회피 사운드 재생
+        if (dodgeAudioSource != null && dodgeSound != null)
+        {
+            dodgeAudioSource.PlayOneShot(dodgeSound);
+        }
         dodgeTimer = dodgeDuration;
         invincibleTimer = invincibleDuration;
         nextDodgeTime = Time.time + dodgeCooldown;
@@ -510,8 +566,7 @@ public class PlayerController : MonoBehaviour
         knockbackDirection.Normalize();
 
         // 경직 시간 동안 설정한 거리만큼 밀려남
-        hitKnockbackVelocity =
-            knockbackDirection * (hitKnockbackDistance / stunDuration);
+        hitKnockbackVelocity = knockbackDirection * (hitKnockbackDistance / stunDuration);
 
         // 기존 콤보 초기화
         comboStep = 0;
@@ -543,8 +598,18 @@ public class PlayerController : MonoBehaviour
             return;
 
         isParrying = true;
+
+        if (parryAudioSource != null && parrySound != null)
+        {
+            parryAudioSource.PlayOneShot(parrySound);
+        }
+
         parryTimer = parryDuration;
         nextParryTime = Time.time + parryCooldown;
+
+        // 패링 방어막 활성화
+        if (parryEffect != null)
+            parryEffect.SetActive(true);
 
         if (animator != null)
         {
@@ -561,6 +626,9 @@ public class PlayerController : MonoBehaviour
             return false;
 
         isParrying = false;
+
+        if (parryEffect != null)
+            parryEffect.SetActive(false);
 
         Debug.Log("패링 성공");
         return true;
@@ -593,4 +661,49 @@ public class PlayerController : MonoBehaviour
     }
 
 
+    private void PlayAttackSound()
+    {
+        if (attackAudioSource == null || attackSounds.Length == 0)
+            return;
+
+        int randomIndex = Random.Range(0, attackSounds.Length);
+
+        attackAudioSource.PlayOneShot(attackSounds[randomIndex]);
+    }
+
+
+    private void UpdateFootsteps()
+    {
+        // 실제 캐릭터 이동 속도 확인
+        float horizontalSpeed = new Vector3(
+            controller.velocity.x,
+            0f,
+            controller.velocity.z
+        ).magnitude;
+
+        // 이동하지 않으면 발소리 정지
+        if (horizontalSpeed < 0.1f ||
+            isDodging || isParrying || isHitStunned)
+        {
+            footstepTimer = 0f;
+            return;
+        }
+
+        float interval = isSprint ? runStepInterval : walkStepInterval;
+
+        footstepTimer += Time.deltaTime;
+
+        if (footstepTimer >= interval)
+        {
+            footstepTimer = 0f;
+
+            if (footstepAudioSource != null &&
+                footstepSounds != null &&
+                footstepSounds.Length > 0)
+            {
+                int randomIndex = Random.Range(0, footstepSounds.Length);
+                footstepAudioSource.PlayOneShot(footstepSounds[randomIndex]);
+            }
+        }
+    }
 }

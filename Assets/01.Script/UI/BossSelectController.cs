@@ -1,45 +1,56 @@
 ﻿
 using UnityEngine;
 using UnityEngine.SceneManagement;
-using TMPro;
 
 public class BossSelectController : MonoBehaviour
 {
     [Header("보스 정보창")]
-    [SerializeField] private GameObject bossInfoPanel;
-
-    [Header("보스 정보 텍스트")]
-    [SerializeField] private TMP_Text bossNameText;
-    [SerializeField] private TMP_Text bossDescriptionText;
+    [SerializeField] private GameObject golemInfoPanel;
+    [SerializeField] private GameObject mutantInfoPanel;
 
     [Header("보스 씬")]
-    [SerializeField] private string bossSceneName = "BossScene";
+    [SerializeField] private string golemSceneName = "GolemBossScene";
+    [SerializeField] private string mutantSceneName = "MutantBossScene";
 
     private void Start()
     {
-        // 시작할 때 정보창 숨기기
-        bossInfoPanel.SetActive(false);
+        golemInfoPanel.SetActive(false);
+        mutantInfoPanel.SetActive(false);
     }
 
     // 골렘 버튼 클릭
     public void ShowGolemInfo()
     {
-        bossNameText.text = "Boss Name";
-
-        bossDescriptionText.text = "Boss Info";
-
-        bossInfoPanel.SetActive(true);
+        golemInfoPanel.SetActive(true);
     }
 
-    // 정보창 닫기
-    public void CloseBossInfo()
+    // 뮤턴트 버튼 클릭
+    public void ShowMutantInfo()
     {
-        bossInfoPanel.SetActive(false);
+        mutantInfoPanel.SetActive(true);
     }
 
-    // 보스 입장
-    public void EnterBoss()
+    // 골렘 정보창 닫기
+    public void CloseGolemInfo()
     {
-        SceneManager.LoadScene(bossSceneName);
+        golemInfoPanel.SetActive(false);
+    }
+
+    // 뮤턴트 정보창 닫기
+    public void CloseMutantInfo()
+    {
+        mutantInfoPanel.SetActive(false);
+    }
+
+    // 골렘 씬 입장
+    public void EnterGolemBoss()
+    {
+        SceneManager.LoadScene(golemSceneName);
+    }
+
+    // 뮤턴트 씬 입장
+    public void EnterMutantBoss()
+    {
+        SceneManager.LoadScene(mutantSceneName);
     }
 }
